@@ -1,76 +1,93 @@
 <p align="center">
-  <img src="gui/assets/icon.png" width="96" alt="AsusDisplay">
+  <img src="gui/assets/icon.png" width="128" alt="AsusDisplay app icon">
 </p>
 
 <h1 align="center">AsusDisplay</h1>
 
 <p align="center">
-  Control your ASUS monitor from a clean desktop app or the command line — on <b>Linux</b> and <b>Windows</b>.<br>
-  Brightness, contrast, GameVisual/Splendid modes, HDR, OLED care, GamePlus, colour, input and more.
+  <b>A free ASUS DisplayWidget Center alternative for Linux and Windows.</b><br>
+  Control your ASUS monitor from your desktop: brightness, GameVisual modes, HDR, OLED care,
+  GamePlus, colour and input.
 </p>
 
 <p align="center">
-  <img src="docs/images/gui-xg27.png" width="820" alt="AsusDisplay controlling an ROG Strix XG27ACDMS">
+  <img src="docs/images/gui-xg27.png" width="820" alt="AsusDisplay changing the picture settings of an ASUS ROG Strix XG27ACDMS OLED monitor">
 </p>
 
-ASUS only ships **DisplayWidget Center** (and the older DisplayWidget / ASUS DisplayWidget) for
-Windows, and there's nothing for Linux at all. AsusDisplay is an open, lightweight re-implementation
-of its monitor controls. The app is a single native binary (a few MB), with no .NET runtime, no
-telemetry and no account.
+ASUS only makes DisplayWidget Center for Windows, and there's no ASUS monitor software for Linux at
+all. AsusDisplay does the same job on both. You change your monitor's settings from a normal app
+window instead of the joystick and on-screen menu.
 
-## Why
+It's free and open source, a few MB, with no account and no telemetry.
 
-- **It's the only option on Linux.** No official ASUS monitor software exists for Linux.
-- **It's pure Rust and GPU-rendered.** Built with [GPUI](https://gpui.rs/) — no WebView, no Node/pnpm, no .NET runtime, and no 500 MB background bloat.
-- **It lives in your status bar.** Closing the window destroys the GPU surface (freeing VRAM) while keeping a tiny status-bar icon active in the background. On Linux, you can even scroll your mouse wheel directly on the status-bar icon to step monitor brightness.
-- **It shows only what your monitor has.** Settings are read from the monitor itself, so you don't
-  see controls your panel doesn't support.
+## What it can do
 
-## How it works
+- **Brightness and contrast** sliders that change instantly.
+- **GameVisual and Splendid picture modes:** FPS, Racing, Cinema, sRGB and the rest, one click away.
+- **Gaming settings:** HDR mode, Shadow Boost, Variable Overdrive, and the GamePlus crosshair, timer
+  and FPS counter.
+- **OLED care** for ROG OLED monitors: pixel cleaning, screen move, uniform brightness, logo and
+  taskbar detection.
+- **Colour:** colour temperature, gamma, red/green/blue gain and saturation.
+- **Input switching** between HDMI, DisplayPort and USB-C, plus KVM and picture-in-picture on
+  monitors that have them.
+- **Profiles:** save your settings and switch back with one click. Pick a picture mode per app, and
+  the monitor switches when you open that game.
+- **Tray icon:** close the window and change modes, inputs, brightness or profiles from the system
+  tray. On Linux you can scroll on the icon to change brightness.
+- **Several monitors** at once, each in its own tab.
+- **ASUS monitor light bars** (Linux).
 
-DisplayWidget Center doesn't use a special driver — it sends standard **DDC/CI** commands (VESA
-MCCS) over the display cable, plus a set of ASUS-specific VCP codes (`0xDC`, `0xE0`–`0xFF`).
-AsusDisplay sends the same commands:
+The app asks your monitor what it supports and only shows those settings, so you won't see
+controls your monitor doesn't have.
 
-- **Linux:** straight over `/dev/i2c-*` (just needs the `i2c-dev` kernel module; no ddcutil), with a native D-Bus `StatusNotifierItem` tray icon (`ksni`) that works on Wayland and X11 without GTK.
-- **Windows:** through the built-in monitor API (`dxva2.dll`), with a native Win32 system tray icon.
+## Supported monitors
 
-The full code map, and how each setting was worked out, is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
+There's no model list. Like DisplayWidget Center, the app reads what each monitor supports, so any
+ASUS monitor that works with DisplayWidget Center should work here: ROG Strix, ROG Swift, TUF
+Gaming, ProArt, ZenScreen and the rest of the ASUS range.
 
-## Supported devices
+| Monitor | Tested |
+|---|---|
+| ROG Strix XG27ACDMS (QD-OLED) | yes |
+| TUF Gaming VG27AQL1A (IPS) | yes |
+| Other ASUS monitors | should work, please tell me |
+| Other brands | basic controls only (brightness, contrast, input, colour) |
 
-The app has **no model list**. It reads each monitor's own capability report and the ASUS table
-version, then shows the settings that monitor actually exposes — the same way DisplayWidget Center
-does. So any ASUS monitor that works with the Windows app should work here.
-
-| Model | Panel | Status |
-|---|---|---|
-| ROG Strix XG27ACDMS | QD-OLED | verified on hardware (read + write) |
-| TUF Gaming VG27AQL1A | IPS | verified on hardware (read + write) |
-| Other ROG / TUF / ProArt / ZenScreen | — | should work; untested, reports welcome |
-| Non-ASUS monitors | — | standard controls only (brightness, contrast, input, colour) |
-
-Non-ASUS monitors get the standard DDC/CI controls; the ASUS-only settings are hidden automatically.
-If you try a model that isn't listed, please [open an issue](../../issues) with the result — even if
-it just works. See [Adding your device](#adding-your-device).
+Tried it on a monitor that isn't listed? [Open an issue](../../issues) and say how it went, even if
+it just works. **Copy report** in the app's Settings page copies everything I need.
 
 <p align="center">
-  <img src="docs/images/gui-vg27.png" width="820" alt="The app adapting to a TUF VG27AQL1A">
-  <br><em>The UI adapts per monitor — a different panel shows different sections and controls.</em>
+  <img src="docs/images/gui-vg27.png" width="820" alt="AsusDisplay showing the settings of an ASUS TUF Gaming VG27AQL1A monitor">
+  <br><em>A different monitor gets a different set of pages.</em>
 </p>
 
 ## Install
 
+### Windows
+
+There's no installer yet, so you build it once:
+
+1. Install [Rust](https://rustup.rs) and Visual Studio Build Tools with **Desktop development with C++**.
+2. Run:
+   ```powershell
+   git clone https://github.com/KharalDipendra/Asus-Displaywidget-Linux
+   cd Asus-Displaywidget-Linux
+   cargo build --release --workspace
+   ```
+3. Start `target\release\asusdisplay-gui.exe`.
+
+You can keep DisplayWidget Center installed, just don't run both at the same time.
+
 ### Linux
 
+On Arch:
+
 ```sh
-# Arch (only Rust + standard X11/Wayland/Vulkan libraries needed — no WebKitGTK or Node)
 sudo pacman -S --needed rust base-devel vulkan-icd-loader libxkbcommon libxkbcommon-x11 wayland
 
 git clone https://github.com/KharalDipendra/Asus-Displaywidget-Linux
 cd Asus-Displaywidget-Linux
-
-# build both CLI (asusdisplay) and GPUI desktop app (asusdisplay-gui)
 cargo build --release --workspace
 sudo install -Dm755 target/release/asusdisplay /usr/local/bin/asusdisplay
 sudo install -Dm755 target/release/asusdisplay-gui /usr/local/bin/asusdisplay-gui
@@ -78,7 +95,10 @@ sudo install -Dm644 linux/asusdisplay.desktop /usr/share/applications/asusdispla
 sudo install -Dm644 gui/assets/icon.png /usr/share/icons/hicolor/512x512/apps/asusdisplay.png
 ```
 
-Give yourself I2C access once:
+On other distros, install Rust plus your distro's Vulkan, xkbcommon and Wayland packages, then run
+the same steps.
+
+Then let the app talk to your monitors (once):
 
 ```sh
 sudo install -Dm644 linux/i2c-dev.conf /etc/modules-load.d/i2c-dev.conf
@@ -87,105 +107,49 @@ sudo modprobe i2c-dev
 sudo udevadm control --reload && sudo udevadm trigger
 ```
 
-The udev rule grants the logged-in user access to GPU I2C buses only. If you already run `ddcutil`,
-its rule does the same and you can skip ours.
+AsusDisplay is now in your app menu.
 
-### Windows
+## FAQ
 
-Needs the [Rust toolchain](https://rustup.rs) and Visual Studio Build Tools with the **Desktop development with C++** workload (no Node or pnpm needed).
+### Does ASUS DisplayWidget Center work on Linux?
 
-```powershell
-git clone https://github.com/KharalDipendra/Asus-Displaywidget-Linux
-cd Asus-Displaywidget-Linux
-cargo build --release --workspace
-# CLI -> target\release\asusdisplay.exe
-# App -> target\release\asusdisplay-gui.exe
-```
+No, ASUS only releases it for Windows. AsusDisplay is the Linux alternative, and it runs on Windows
+too.
 
-DisplayWidget Center can stay installed, but don't run both at once — DDC/CI doesn't like two
-programs talking to the monitor together.
+### Is it safe for my monitor?
 
-### Troubleshooting (Linux)
+It sends the same standard monitor commands (DDC/CI) that DisplayWidget Center sends. Disruptive
+actions like pixel cleaning or resetting your settings always ask first.
 
-- **Nothing found with the NVIDIA proprietary driver:** add
-  `options nvidia NVreg_RegistryDwords=RMUseSwI2c=0x01;RMI2cSpeed=100` to
-  `/etc/modprobe.d/nvidia-i2c.conf` and reboot.
-- **Reads fail intermittently:** some monitors need more time between commands — try `--sleep-mult 2`.
+### My monitor doesn't show up
 
-## Using the app
+Turn on DDC/CI in the monitor's on-screen menu, and close DisplayWidget Center if it's running. On
+Linux, check you did the step above. More fixes, including NVIDIA on Linux, are in
+[troubleshooting](docs/ADVANCED.md#troubleshooting).
 
-Each monitor gets a tab in the title bar. The pages on the left only show what that monitor has.
+### A monitor went missing after a graphics driver crash or update
 
-- **Status bar / background mode:** Closing the window doesn't quit the app — it stays in your
-  status bar so you can switch modes, inputs, brightness or saved profiles anytime without opening
-  the window. Start with `asusdisplay-gui --tray` (or turn on **Launch at login** in Settings)
-  to boot straight into the status bar.
-- **Monitors coming and going:** if a monitor stops answering (a graphics driver restart does this
-  on Windows), the app looks for it again. On Windows, plugged-in and unplugged monitors also show
-  up by themselves. **Rescan** in the title bar does the same by hand.
-- **Profiles:** Save your settings and switch back with one click, or export them as JSON to share.
-  You can also pick a picture mode per app, and the monitor switches when that app is running.
-- **Safety:** Settings locked in the current mode show inline reasons (e.g. sRGB locks brightness
-  and colour on some firmware), and disruptive actions (OLED pixel cleaning, factory reset, power
-  standby) always ask for confirmation first.
+Click **Rescan** in the title bar. On Windows the app usually finds it again by itself.
 
-## Using the command line
+### Can I control my monitor from the command line or a keyboard shortcut?
 
-```sh
-asusdisplay list                       # monitors
-asusdisplay status                     # every supported setting and its value
-asusdisplay get brightness
-asusdisplay set brightness 40
-asusdisplay set brightness +10         # relative
-asusdisplay set mode fps               # GameVisual / Splendid mode
-asusdisplay set uniform-brightness off # toggles take on / off / toggle
-asusdisplay set input hdmi1
-asusdisplay -d VG27 set contrast 75    # pick a monitor by index, model, serial or connector
-asusdisplay -d all set brightness -10  # every monitor at once
-asusdisplay profile save gaming        # save current settings to a named profile
-asusdisplay profile apply gaming       # restore a saved profile
-asusdisplay profile list               # list saved profiles
-asusdisplay report                     # generate a markdown device report for GitHub issues
-asusdisplay debug                      # list settings this monitor doesn't expose, and why
-asusdisplay features                   # names, VCP codes and accepted values
-```
-
-Brightness and the other sliders apply in about 0.2 s, so they work well bound to keyboard
-shortcuts. Disruptive settings and values outside what the monitor advertises need `--force`.
-`asusdisplay raw 0xE9` reads any VCP code and `asusdisplay raw 0xE9 1` writes it, without checks.
-
-If you have an ASUS monitor light bar, `asusdisplay lightbar white 60 5000` and
-`asusdisplay lightbar rgb static 255 80 0` control it (Linux, hidraw), or use the **Light Bar** tab
-in `asusdisplay-gui`.
-
-## Adding your device
-
-1. Click **Copy Device Report** in the System tab of `asusdisplay-gui`, or run:
-   ```sh
-   asusdisplay report > report.md
-   ```
-   and attach it to a GitHub issue.
-2. For a setting that reads wrong or `unknown`: run `asusdisplay raw 0xNN`, change it in the
-   monitor's OSD, run it again, and note which value moved.
-3. Add or fix entries in `src/features.rs`, run `cargo test`, and open a PR — mention which settings
-   you checked on the real monitor.
+Yes, there's a command-line tool too. See [docs/ADVANCED.md](docs/ADVANCED.md).
 
 ## About this project
 
 AsusDisplay was built with substantial help from AI:
 
-- **Protocol.** The DDC/CI protocol and ASUS's private VCP codes were reverse engineered by
-  decompiling ASUS DisplayWidget Center and tracing how each UI setting maps to a monitor command.
-- **Code & GPUI Interface.** AI helped write the Rust DDC/CI library, CLI, and native GPUI desktop
-  and status-bar application.
+- **Protocol.** The monitor commands were reverse engineered by decompiling ASUS DisplayWidget
+  Center and tracing which command each setting sends.
+- **Code.** AI helped write the library, the command-line tool and the desktop app.
 
-All AI output is reviewed personally before being committed. Protocols for the devices I own were
-validated against real hardware; support for other models relies on community testing and feedback,
-so bug reports and PRs are very welcome.
+All AI output is reviewed personally before being committed. The monitors I own were tested on real
+hardware; support for other models relies on community testing and feedback, so bug reports and
+PRs are very welcome.
 
 No ASUS code is included in this repository. This project is not affiliated with, authorised by, or
 endorsed by ASUS. "ASUS", "ROG", "TUF" and "ProArt" are trademarks of their owner.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).

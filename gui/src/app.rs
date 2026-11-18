@@ -487,7 +487,7 @@ impl MainView {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .child(icon(ICON_MONITOR, 16., theme::accent()))
+                    .child(icon(ICON_LOGO, 18., theme::accent()))
                     .child(div().text_size(px(13.)).font_weight(FontWeight::SEMIBOLD).child("AsusDisplay")),
             )
             .child(div().flex().items_center().gap(px(4.)).children(tabs))
