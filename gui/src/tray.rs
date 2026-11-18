@@ -5,7 +5,8 @@ pub enum TrayAction {
     ToggleWindow,
     ShowWindow,
     SelectMonitor(usize),
-    SetVcp { code: u8, value: u16 },
+    /// `input` as the CLI takes it: a number or a choice name.
+    Write { key: &'static str, input: String },
     StepBrightness(i16),
     ApplyProfile(String),
     SetLightBarPower(bool),
@@ -23,10 +24,11 @@ pub struct TrayStateSnapshot {
     pub is_oled: bool,
     pub brightness: Option<u16>,
     pub contrast: Option<u16>,
-    pub current_mode: Option<u16>,
-    pub available_modes: Vec<(u16, String)>,
-    pub current_input: Option<u16>,
-    pub available_inputs: Vec<(u16, String)>,
+    /// `(choice name, label)` pairs; `current_*` is a choice name.
+    pub current_mode: Option<String>,
+    pub available_modes: Vec<(String, String)>,
+    pub current_input: Option<String>,
+    pub available_inputs: Vec<(String, String)>,
     pub profiles: Vec<String>,
     pub lightbar_connected: bool,
     pub lightbar_on: bool,
@@ -72,87 +74,25 @@ fn format_tooltip(snapshot: &TrayStateSnapshot) -> String {
     if let Some(c) = snapshot.contrast {
         parts.push(format!("Contrast: {c}%"));
     }
-    if let Some(mode_val) = snapshot.current_mode
-        && let Some((_, mode_name)) = snapshot.available_modes.iter().find(|(v, _)| *v == mode_val)
+    if let Some(mode_val) = &snapshot.current_mode
+        && let Some((_, mode_name)) = snapshot.available_modes.iter().find(|(v, _)| v == mode_val)
     {
         parts.push(format!("Mode: {mode_name}"));
     }
     parts.join(" | ")
 }
 
-/// Renders a crisp 32x32 monitor glyph in RGBA byte order (`[r, g, b, a]`).
-#[allow(dead_code)]
+/// The 32x32 tray icon in RGBA byte order.
+#[cfg_attr(not(windows), allow(dead_code))]
 fn generate_icon_rgba() -> (u32, u32, Vec<u8>) {
-    const W: usize = 32;
-    const H: usize = 32;
-    let mut rgba = vec![0u8; W * H * 4];
-
-    let mut set_px = |x: usize, y: usize, r: u8, g: u8, b: u8, a: u8| {
-        if x < W && y < H {
-            let idx = (y * W + x) * 4;
-            rgba[idx] = r;
-            rgba[idx + 1] = g;
-            rgba[idx + 2] = b;
-            rgba[idx + 3] = a;
-        }
-    };
-
-    // Monitor outer bezel (2..30 x 4..23), rounded 1px corners
-    for y in 4..23 {
-        for x in 2..30 {
-            let is_corner = (x == 2 || x == 29) && (y == 4 || y == 22);
-            if is_corner {
-                continue;
-            }
-            let is_border = x == 2 || x == 29 || y == 4 || y == 22 || x == 3 || x == 28 || y == 5 || y == 21;
-            if is_border {
-                // Crisp zinc/white bezel
-                set_px(x, y, 228, 228, 231, 255);
-            } else {
-                // Dark slate panel interior
-                set_px(x, y, 24, 24, 27, 255);
-            }
-        }
-    }
-
-    // Subtle blue-to-emerald accent bar inside lower display area
-    for y in 17..19 {
-        for x in 6..26 {
-            let t = (x - 6) as f32 / 19.0;
-            let r = (56.0 * (1.0 - t) + 52.0 * t) as u8;
-            let g = (189.0 * (1.0 - t) + 211.0 * t) as u8;
-            let b = (248.0 * (1.0 - t) + 153.0 * t) as u8;
-            set_px(x, y, r, g, b, 255);
-        }
-    }
-
-    // Center chin indicator dot
-    for x in 15..17 {
-        set_px(x, 22, 56, 189, 248, 255);
-    }
-
-    // Stand neck
-    for y in 23..27 {
-        for x in 14..18 {
-            set_px(x, y, 161, 161, 170, 255);
-        }
-    }
-
-    // Stand base
-    for y in 27..29 {
-        for x in 9..23 {
-            set_px(x, y, 212, 212, 216, 255);
-        }
-    }
-
-    (W as u32, H as u32, rgba)
+    (32, 32, crate::assets::app_icon(32).into_raw())
 }
 
-/// Renders the 32x32 monitor glyph in ARGB32 network byte order (`[a, r, g, b]`) for `ksni`.
-#[allow(dead_code)]
+/// The tray icon in ARGB32 network byte order (`[a, r, g, b]`) for `ksni`.
+#[cfg(target_os = "linux")]
 fn generate_icon_argb32() -> (i32, i32, Vec<u8>) {
     let (w, h, mut data) = generate_icon_rgba();
-    for px in data.chunks_exact_mut(4) {
+    for px in data.as_chunks_mut::<4>().0 {
         px.rotate_right(1);
     }
     (w as i32, h as i32, data)
@@ -188,7 +128,7 @@ mod platform {
         }
 
         fn icon_name(&self) -> String {
-            "video-display".into()
+            "asusdisplay".into()
         }
 
         fn icon_pixmap(&self) -> Vec<ksni::Icon> {
@@ -300,9 +240,9 @@ mod platform {
                     StandardItem {
                         label,
                         activate: Box::new(move |this: &mut Self| {
-                            let _ = this.action_tx.send(TrayAction::SetVcp {
-                                code: 0x10,
-                                value: val,
+                            let _ = this.action_tx.send(TrayAction::Write {
+                                key: "brightness",
+                                input: val.to_string(),
                             });
                         }),
                         ..Default::default()
@@ -346,7 +286,8 @@ mod platform {
                 let selected = self
                     .snapshot
                     .current_mode
-                    .and_then(|cur| modes.iter().position(|(v, _)| *v == cur))
+                    .as_ref()
+                    .and_then(|cur| modes.iter().position(|(v, _)| v == cur))
                     .unwrap_or(0);
                 let options = modes
                     .iter()
@@ -362,10 +303,10 @@ mod platform {
                             RadioGroup {
                                 selected,
                                 select: Box::new(move |this: &mut Self, idx| {
-                                    if let Some(&(val, _)) = modes.get(idx) {
-                                        let _ = this.action_tx.send(TrayAction::SetVcp {
-                                            code: 0xDC,
-                                            value: val,
+                                    if let Some((val, _)) = modes.get(idx) {
+                                        let _ = this.action_tx.send(TrayAction::Write {
+                                            key: "mode",
+                                            input: val.clone(),
                                         });
                                     }
                                 }),
@@ -385,7 +326,8 @@ mod platform {
                 let selected = self
                     .snapshot
                     .current_input
-                    .and_then(|cur| inputs.iter().position(|(v, _)| *v == cur))
+                    .as_ref()
+                    .and_then(|cur| inputs.iter().position(|(v, _)| v == cur))
                     .unwrap_or(0);
                 let options = inputs
                     .iter()
@@ -401,10 +343,10 @@ mod platform {
                             RadioGroup {
                                 selected,
                                 select: Box::new(move |this: &mut Self, idx| {
-                                    if let Some(&(val, _)) = inputs.get(idx) {
-                                        let _ = this.action_tx.send(TrayAction::SetVcp {
-                                            code: 0x60,
-                                            value: val,
+                                    if let Some((val, _)) = inputs.get(idx) {
+                                        let _ = this.action_tx.send(TrayAction::Write {
+                                            key: "input",
+                                            input: val.clone(),
                                         });
                                     }
                                 }),
@@ -607,7 +549,7 @@ mod platform {
                     format!("mode:{val}"),
                     name,
                     true,
-                    snapshot.current_mode == Some(*val),
+                    snapshot.current_mode.as_ref() == Some(val),
                     None,
                 );
                 let _ = mode_sub.append(&item);
@@ -622,7 +564,7 @@ mod platform {
                     format!("input:{val}"),
                     name,
                     true,
-                    snapshot.current_input == Some(*val),
+                    snapshot.current_input.as_ref() == Some(val),
                     None,
                 );
                 let _ = input_sub.append(&item);
@@ -680,17 +622,11 @@ mod platform {
                 if let Some(rest) = id.strip_prefix("mon:") {
                     rest.parse::<usize>().ok().map(TrayAction::SelectMonitor)
                 } else if let Some(rest) = id.strip_prefix("bright:") {
-                    rest.parse::<u16>()
-                        .ok()
-                        .map(|value| TrayAction::SetVcp { code: 0x10, value })
+                    Some(TrayAction::Write { key: "brightness", input: rest.to_string() })
                 } else if let Some(rest) = id.strip_prefix("mode:") {
-                    rest.parse::<u16>()
-                        .ok()
-                        .map(|value| TrayAction::SetVcp { code: 0xDC, value })
+                    Some(TrayAction::Write { key: "mode", input: rest.to_string() })
                 } else if let Some(rest) = id.strip_prefix("input:") {
-                    rest.parse::<u16>()
-                        .ok()
-                        .map(|value| TrayAction::SetVcp { code: 0x60, value })
+                    Some(TrayAction::Write { key: "input", input: rest.to_string() })
                 } else if let Some(rest) = id.strip_prefix("profile:") {
                     Some(TrayAction::ApplyProfile(rest.to_string()))
                 } else if let Some(rest) = id.strip_prefix("lb_bright:") {

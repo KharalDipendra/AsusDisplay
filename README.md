@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="gui/public/icon.png" width="96" alt="AsusDisplay">
+  <img src="gui/assets/icon.png" width="96" alt="AsusDisplay">
 </p>
 
 <h1 align="center">AsusDisplay</h1>
@@ -65,7 +65,7 @@ it just works. See [Adding your device](#adding-your-device).
 
 ```sh
 # Arch (only Rust + standard X11/Wayland/Vulkan libraries needed — no WebKitGTK or Node)
-sudo pacman -S --needed rust base-devel vulkan-icd-loader libxkbcommon wayland
+sudo pacman -S --needed rust base-devel vulkan-icd-loader libxkbcommon libxkbcommon-x11 wayland
 
 git clone https://github.com/KharalDipendra/Asus-Displaywidget-Linux
 cd Asus-Displaywidget-Linux
@@ -75,6 +75,7 @@ cargo build --release --workspace
 sudo install -Dm755 target/release/asusdisplay /usr/local/bin/asusdisplay
 sudo install -Dm755 target/release/asusdisplay-gui /usr/local/bin/asusdisplay-gui
 sudo install -Dm644 linux/asusdisplay.desktop /usr/share/applications/asusdisplay.desktop
+sudo install -Dm644 gui/assets/icon.png /usr/share/icons/hicolor/512x512/apps/asusdisplay.png
 ```
 
 Give yourself I2C access once:
@@ -113,16 +114,17 @@ programs talking to the monitor together.
 
 ## Using the app
 
-Pick a monitor in the sidebar. The pinned Quick-Control Deck at the top keeps Brightness, Contrast,
-Picture Mode and Input Source one click away regardless of which tab you're viewing.
+Each monitor gets a tab in the title bar. The pages on the left only show what that monitor has.
 
 - **Status bar / background mode:** Closing the window doesn't quit the app — it stays in your
   status bar so you can switch modes, inputs, brightness or saved profiles anytime without opening
-  the window. Start with `asusdisplay-gui --tray` (or enable **Launch at login** in the System tab)
+  the window. Start with `asusdisplay-gui --tray` (or turn on **Launch at login** in Settings)
   to boot straight into the status bar.
-- **Profiles & AppSync:** Save and export JSON monitor profiles (compatible with DisplayWidget
-  Center's export codes), or set lightweight per-app rules to switch GameVisual/Splendid modes
-  automatically when a game or app is running.
+- **Monitors coming and going:** if a monitor stops answering (a graphics driver restart does this
+  on Windows), the app looks for it again. On Windows, plugged-in and unplugged monitors also show
+  up by themselves. **Rescan** in the title bar does the same by hand.
+- **Profiles:** Save your settings and switch back with one click, or export them as JSON to share.
+  You can also pick a picture mode per app, and the monitor switches when that app is running.
 - **Safety:** Settings locked in the current mode show inline reasons (e.g. sRGB locks brightness
   and colour on some firmware), and disruptive actions (OLED pixel cleaning, factory reset, power
   standby) always ask for confirmation first.
