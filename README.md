@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="gui/assets/icon.png" width="128" alt="AsusDisplay app icon">
+  <img src="gui/assets/icon.png?v=2" width="128" alt="AsusDisplay app icon">
 </p>
 
 <h1 align="center">AsusDisplay</h1>
