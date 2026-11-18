@@ -21,8 +21,8 @@ telemetry and no account.
 ## Why
 
 - **It's the only option on Linux.** No official ASUS monitor software exists for Linux.
-- **It's lighter on Windows.** DisplayWidget Center bundles a ~250 MB AI engine and a WebView2 app;
-  this is a small native window.
+- **It's pure Rust and GPU-rendered.** Built with [GPUI](https://gpui.rs/) — no WebView, no Node/pnpm, no .NET runtime, and no 500 MB background bloat.
+- **It lives in your status bar.** Closing the window destroys the GPU surface (freeing VRAM) while keeping a tiny status-bar icon active in the background. On Linux, you can even scroll your mouse wheel directly on the status-bar icon to step monitor brightness.
 - **It shows only what your monitor has.** Settings are read from the monitor itself, so you don't
   see controls your panel doesn't support.
 
@@ -32,8 +32,8 @@ DisplayWidget Center doesn't use a special driver — it sends standard **DDC/CI
 MCCS) over the display cable, plus a set of ASUS-specific VCP codes (`0xDC`, `0xE0`–`0xFF`).
 AsusDisplay sends the same commands:
 
-- **Linux:** straight over `/dev/i2c-*` (just needs the `i2c-dev` kernel module; no ddcutil).
-- **Windows:** through the built-in monitor API (`dxva2.dll`), exactly like the ASUS app.
+- **Linux:** straight over `/dev/i2c-*` (just needs the `i2c-dev` kernel module; no ddcutil), with a native D-Bus `StatusNotifierItem` tray icon (`ksni`) that works on Wayland and X11 without GTK.
+- **Windows:** through the built-in monitor API (`dxva2.dll`), with a native Win32 system tray icon.
 
 The full code map, and how each setting was worked out, is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
@@ -64,19 +64,17 @@ it just works. See [Adding your device](#adding-your-device).
 ### Linux
 
 ```sh
-# Arch (see https://v2.tauri.app/start/prerequisites/ for other distros)
-sudo pacman -S --needed rust pnpm webkit2gtk-4.1 base-devel openssl librsvg
+# Arch (only Rust + standard X11/Wayland/Vulkan libraries needed — no WebKitGTK or Node)
+sudo pacman -S --needed rust base-devel vulkan-icd-loader libxkbcommon wayland
 
 git clone https://github.com/KharalDipendra/Asus-Displaywidget-Linux
 cd Asus-Displaywidget-Linux
 
-# command line tool
-cargo build --release
+# build both CLI (asusdisplay) and GPUI desktop app (asusdisplay-gui)
+cargo build --release --workspace
 sudo install -Dm755 target/release/asusdisplay /usr/local/bin/asusdisplay
-
-# desktop app
-cd gui && pnpm install && pnpm tauri build
-# the installer (.deb / .rpm / AppImage) lands in gui/src-tauri/target/release/bundle/
+sudo install -Dm755 target/release/asusdisplay-gui /usr/local/bin/asusdisplay-gui
+sudo install -Dm644 linux/asusdisplay.desktop /usr/share/applications/asusdisplay.desktop
 ```
 
 Give yourself I2C access once:
@@ -93,14 +91,14 @@ its rule does the same and you can skip ours.
 
 ### Windows
 
-Needs the [.NET-free Rust toolchain](https://rustup.rs), [Node + pnpm](https://pnpm.io), and Visual
-Studio Build Tools with the **Desktop development with C++** workload.
+Needs the [Rust toolchain](https://rustup.rs) and Visual Studio Build Tools with the **Desktop development with C++** workload (no Node or pnpm needed).
 
 ```powershell
 git clone https://github.com/KharalDipendra/Asus-Displaywidget-Linux
 cd Asus-Displaywidget-Linux
-cargo build --release                 # CLI -> target\release\asusdisplay.exe
-cd gui; pnpm install; pnpm tauri build # app  -> gui\src-tauri\target\release\
+cargo build --release --workspace
+# CLI -> target\release\asusdisplay.exe
+# App -> target\release\asusdisplay-gui.exe
 ```
 
 DisplayWidget Center can stay installed, but don't run both at once — DDC/CI doesn't like two
@@ -112,14 +110,22 @@ programs talking to the monitor together.
   `options nvidia NVreg_RegistryDwords=RMUseSwI2c=0x01;RMI2cSpeed=100` to
   `/etc/modprobe.d/nvidia-i2c.conf` and reboot.
 - **Reads fail intermittently:** some monitors need more time between commands — try `--sleep-mult 2`.
-- **App window is blank (NVIDIA):** launch with `WEBKIT_DISABLE_DMABUF_RENDERER=1`.
 
 ## Using the app
 
-Pick a monitor in the sidebar. Sliders apply when you release them. Picking a mode or preset
-re-reads everything, since the monitor relocks other controls. Settings locked in the current mode
-show as "Not available in this mode". **Launch at login** (Linux) adds an autostart entry.
-Disruptive actions (OLED pixel cleaning, reset, power off) ask first.
+Pick a monitor in the sidebar. The pinned Quick-Control Deck at the top keeps Brightness, Contrast,
+Picture Mode and Input Source one click away regardless of which tab you're viewing.
+
+- **Status bar / background mode:** Closing the window doesn't quit the app — it stays in your
+  status bar so you can switch modes, inputs, brightness or saved profiles anytime without opening
+  the window. Start with `asusdisplay-gui --tray` (or enable **Launch at login** in the System tab)
+  to boot straight into the status bar.
+- **Profiles & AppSync:** Save and export JSON monitor profiles (compatible with DisplayWidget
+  Center's export codes), or set lightweight per-app rules to switch GameVisual/Splendid modes
+  automatically when a game or app is running.
+- **Safety:** Settings locked in the current mode show inline reasons (e.g. sRGB locks brightness
+  and colour on some firmware), and disruptive actions (OLED pixel cleaning, factory reset, power
+  standby) always ask for confirmation first.
 
 ## Using the command line
 
@@ -134,6 +140,10 @@ asusdisplay set uniform-brightness off # toggles take on / off / toggle
 asusdisplay set input hdmi1
 asusdisplay -d VG27 set contrast 75    # pick a monitor by index, model, serial or connector
 asusdisplay -d all set brightness -10  # every monitor at once
+asusdisplay profile save gaming        # save current settings to a named profile
+asusdisplay profile apply gaming       # restore a saved profile
+asusdisplay profile list               # list saved profiles
+asusdisplay report                     # generate a markdown device report for GitHub issues
 asusdisplay debug                      # list settings this monitor doesn't expose, and why
 asusdisplay features                   # names, VCP codes and accepted values
 ```
@@ -143,16 +153,16 @@ shortcuts. Disruptive settings and values outside what the monitor advertises ne
 `asusdisplay raw 0xE9` reads any VCP code and `asusdisplay raw 0xE9 1` writes it, without checks.
 
 If you have an ASUS monitor light bar, `asusdisplay lightbar white 60 5000` and
-`asusdisplay lightbar rgb static 255 80 0` control it (Linux, hidraw).
+`asusdisplay lightbar rgb static 255 80 0` control it (Linux, hidraw), or use the **Light Bar** tab
+in `asusdisplay-gui`.
 
 ## Adding your device
 
-1. Attach the output of these to an issue:
+1. Click **Copy Device Report** in the System tab of `asusdisplay-gui`, or run:
    ```sh
-   asusdisplay caps > caps.txt
-   asusdisplay status --all > status.txt
-   asusdisplay debug > debug.txt
+   asusdisplay report > report.md
    ```
+   and attach it to a GitHub issue.
 2. For a setting that reads wrong or `unknown`: run `asusdisplay raw 0xNN`, change it in the
    monitor's OSD, run it again, and note which value moved.
 3. Add or fix entries in `src/features.rs`, run `cargo test`, and open a PR — mention which settings
@@ -160,13 +170,12 @@ If you have an ASUS monitor light bar, `asusdisplay lightbar white 60 5000` and
 
 ## About this project
 
-AsusDisplay was built with substantial help from AI (Anthropic's Claude):
+AsusDisplay was built with substantial help from AI:
 
 - **Protocol.** The DDC/CI protocol and ASUS's private VCP codes were reverse engineered by
   decompiling ASUS DisplayWidget Center and tracing how each UI setting maps to a monitor command.
-- **Code.** AI helped write the Rust backend and the CLI.
-- **Frontend UI.** AI helped scaffold the Vue/TypeScript frontend for the Tauri app, including
-  component layout, styling and state wiring.
+- **Code & GPUI Interface.** AI helped write the Rust DDC/CI library, CLI, and native GPUI desktop
+  and status-bar application.
 
 All AI output is reviewed personally before being committed. Protocols for the devices I own were
 validated against real hardware; support for other models relies on community testing and feedback,

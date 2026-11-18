@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=AsusDisplay
+GenericName=ASUS Monitor Control
+Comment=Native GPUI desktop & status-bar utility for ASUS monitors
+Exec=asusdisplay-gui
+Icon=video-display
+Terminal=false
+Categories=Utility;HardwareSettings;Settings;
+Keywords=ASUS;Monitor;Display;DDC;Brightness;OLED;
+StartupWMClass=asusdisplay-gui
+StartupNotify=true

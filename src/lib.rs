@@ -3,10 +3,13 @@
 //! Settings are standard DDC/CI (VESA MCCS) plus ASUS's private VCP codes (0xDC, 0xE0-0xFF),
 //! reverse engineered from ASUS DisplayWidget Center. See `docs/PROTOCOL.md`.
 
+pub mod appsync;
 mod caps;
 mod features;
 pub mod lightbar;
 mod monitor;
+pub mod profiles;
+pub mod report;
 
 #[cfg(target_os = "linux")]
 mod linux;
@@ -65,6 +68,36 @@ pub fn enumerate(options: &Options) -> Vec<Monitor> {
 
     monitors.sort_by_key(|m| (!m.is_asus(), m.id.to_lowercase()));
     monitors
+}
+
+/// Cross-platform configuration directory for `asusdisplay`, created if missing.
+pub fn config_dir() -> std::path::PathBuf {
+    #[cfg(target_os = "linux")]
+    let dir = std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .filter(|v| !v.is_empty())
+                .map(|h| std::path::PathBuf::from(h).join(".config"))
+        })
+        .map(|base| base.join("asusdisplay"))
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp/asusdisplay"));
+
+    #[cfg(windows)]
+    let dir = std::env::var_os("APPDATA")
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("USERPROFILE")
+                .filter(|v| !v.is_empty())
+                .map(|u| std::path::PathBuf::from(u).join(".config"))
+        })
+        .map(|base| base.join("asusdisplay"))
+        .unwrap_or_else(|| std::env::temp_dir().join("asusdisplay"));
+
+    let _ = std::fs::create_dir_all(&dir);
+    dir
 }
 
 /// The parts of an EDID we use.

@@ -65,6 +65,13 @@ enum Command {
         #[command(subcommand)]
         action: LightbarAction,
     },
+    /// Manage saved monitor profiles
+    Profile {
+        #[command(subcommand)]
+        action: ProfileAction,
+    },
+    /// Generate a Markdown device support report
+    Report,
 }
 
 #[derive(Subcommand)]
@@ -75,6 +82,22 @@ enum LightbarAction {
     Rgb { effect: String, r: u8, g: u8, b: u8 },
     /// Turn the light bar off
     Off,
+}
+
+#[derive(Subcommand)]
+enum ProfileAction {
+    /// List saved profiles
+    List,
+    /// Save current monitor settings as a profile
+    Save { name: String },
+    /// Apply a saved profile to the monitor
+    Apply { name: String },
+    /// Delete a saved profile
+    Delete { name: String },
+    /// Export a saved profile to a JSON file
+    Export { name: String, file: std::path::PathBuf },
+    /// Import a profile from a JSON file
+    Import { file: std::path::PathBuf },
 }
 
 fn main() -> ExitCode {
@@ -90,6 +113,39 @@ fn main() -> ExitCode {
 fn run(cli: &Cli) -> Result<()> {
     if let Command::Lightbar { action } = &cli.command {
         return lightbar(action);
+    }
+
+    if let Command::Profile { action } = &cli.command {
+        match action {
+            ProfileAction::List => {
+                let profiles = asusdisplay::profiles::list_profiles();
+                if profiles.is_empty() {
+                    println!("no saved profiles");
+                } else {
+                    for p in profiles {
+                        println!("{:<24} {:<14} ({} settings)", p.name, p.model, p.vcp_values.len());
+                    }
+                }
+                return Ok(());
+            }
+            ProfileAction::Delete { name } => {
+                asusdisplay::profiles::delete_profile(name)?;
+                println!("deleted profile '{name}'");
+                return Ok(());
+            }
+            ProfileAction::Export { name, file } => {
+                let profile = asusdisplay::profiles::load_profile(name)?;
+                asusdisplay::profiles::export_profile(&profile, file)?;
+                println!("exported profile '{}' to {}", profile.name, file.display());
+                return Ok(());
+            }
+            ProfileAction::Import { file } => {
+                let profile = asusdisplay::profiles::import_profile(file)?;
+                println!("imported profile '{}' ({} settings)", profile.name, profile.vcp_values.len());
+                return Ok(());
+            }
+            ProfileAction::Save { .. } | ProfileAction::Apply { .. } => {}
+        }
     }
 
     let options = Options { bus: cli.bus, sleep_multiplier: cli.sleep_mult, verbose: cli.verbose };
@@ -200,6 +256,25 @@ fn command(m: &mut Monitor, cli: &Cli) -> Result<()> {
             }
         }
         Command::Lightbar { .. } => unreachable!("handled before selecting monitors"),
+        Command::Profile { action } => match action {
+            ProfileAction::Save { name } => {
+                let profile = asusdisplay::profiles::capture_profile(m, name)?;
+                let path = asusdisplay::profiles::save_profile_to_disk(&profile)?;
+                println!("saved profile '{}' ({} settings) to {}", profile.name, profile.vcp_values.len(), path.display());
+            }
+            ProfileAction::Apply { name } => {
+                let profile = asusdisplay::profiles::load_profile(name)?;
+                let count = asusdisplay::profiles::apply_profile(m, &profile)?;
+                println!("applied profile '{}' ({count} settings)", profile.name);
+            }
+            ProfileAction::List
+            | ProfileAction::Delete { .. }
+            | ProfileAction::Export { .. }
+            | ProfileAction::Import { .. } => unreachable!("handled before selecting monitors"),
+        },
+        Command::Report => {
+            print!("{}", asusdisplay::report::generate_device_report(m));
+        }
     }
     Ok(())
 }
